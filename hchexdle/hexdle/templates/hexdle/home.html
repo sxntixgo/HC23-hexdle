@@ -1,0 +1,116 @@
+{% extends "./base.html" %}
+{% load static %}
+{% block content %}
+<div class="container-lg pt-5">
+    {% if not user.is_authenticated and request.resolver_match.view_name == 'home' %}
+    <div class="alert alert-primary d-flex align-items-center" role="alert">
+        <div>
+            To play this game, you need to login first. If you are not have a user, please register first.
+        </div>
+    </div>
+    {% else %}
+    <h2>Find the HEX string to get the flag</h2>
+    {% for row in rows %}
+    <div class="row justify-content-center">
+        {% for col in cols %}
+            <input type="text" class="ifield ms-1 mt-1 row{{ row }}" id="field{{ row }}{{ col }}" maxlength="1">
+        {% endfor %}
+    </div>
+    {% endfor %}
+    <div class="modal" tabindex="-1" id="galleryModal">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header">
+              <h5 class="modal-title" id="response">Modal title</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+</div>
+<script>
+    function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            // Does this cookie string begin with the name we want?
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+    }
+
+    async function checkAnswer(answer) {
+        const response = await fetch("{% url 'check_answer' %}", {
+            method: "POST",
+            body: JSON.stringify({
+                answer: answer
+            }),  
+            headers: {
+            "Content-type": "application/json; charset=UTF-8",
+            "X-CSRFToken": getCookie('csrftoken')
+            }
+        });
+        let jsonData = await response.json();
+        if (!jsonData.gameOver) {
+            currentRow = {{ last_row }} - jsonData.remainingAttempts
+            for (let i=0; i <= {{ last_col }}; i++) {
+                if (i === {{ last_col }} ) {
+                    field = "lastfield" + currentRow;
+                } else {
+                    field = "field" + currentRow + i;
+                }
+                if (jsonData.result[i] === "y") {
+                    document.getElementById(field).style.setProperty('background-color', 'rgba(83, 164, 81, 0.5)');
+                } else if (jsonData.result[i] === "m") {
+                    document.getElementById(field).style.setProperty('background-color', 'rgba(246, 194, 68, 0.5)');
+                } else {
+                    document.getElementById(field).style.setProperty('background-color', 'rgba(110, 117, 124, 0.5)');
+                }
+            }
+        }
+        if (jsonData.message) {
+            document.getElementById("response").innerHTML = jsonData.message;
+            var galleryModal = new bootstrap.Modal(document.getElementById('galleryModal'), { keyboard: false});  
+            galleryModal.show();
+        }
+    }
+
+    var dictionary = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "a", "b", "c", "d", "e", "f"];
+
+    {% for row in rows %}
+    var elts{{row}} = document.getElementsByClassName("row{{row}}");
+    Array.from(elts{{row}}).forEach(function(elt) {
+        elt.addEventListener("keyup", function(event) {
+        if (!dictionary.includes(elt.value)) {
+            elt.value = "";
+        }
+        if (elt.value.length === Number(elt.maxLength) && elt.nextElementSibling) {
+          elt.nextElementSibling.focus();
+        }
+        if (event.keyCode == 8) {
+          elt.value = '';
+          if (elt.previousElementSibling) {
+            elt.previousElementSibling.focus();
+          }
+        }
+        lastfield = "field{{row}}"+{{ last_col }};
+        if (elt.id === lastfield && dictionary.includes(event.key)) {
+            elt.id = "lastfield{{row}}";
+            answer = new Array()
+            for (let i = 0; i < elts{{row}}.length; i++) {
+                answer.push(elts{{row}}[i].value);
+            }
+            checkAnswer(answer);
+        }
+      });
+    })
+    {% endfor %}
+</script>
+{% endblock %}
